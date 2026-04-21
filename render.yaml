@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: cropsense-ai
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: ROBOFLOW_KEY
+        sync: false
+      - key: RF_WORKSPACE
+        value: anands-workspace-yczgh
+      - key: RF_MODEL
+        value: leaf-disease-ai
+      - key: RF_VERSION
+        value: "1"
+      - key: HF_TOKEN
+        sync: false
+      - key: DEEPAI_KEY
+        sync: false
+      - key: GROQ_KEY
+        sync: false
+      - key: OPENAI_KEY
+        sync: false
+      - key: PORT
+        value: "3000"
