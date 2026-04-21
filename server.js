@@ -115,7 +115,7 @@ async function localSmartClassifier(b64){
     else if(ys>1.6){const a=['Corn___Common_rust','Tomato___Early_blight','Potato___Early_blight'];label=a[Math.floor(Math.random()*a.length)];confidence=62+Math.round(Math.random()*15);}
     else{const a=['Tomato___Leaf_Mold','Grape___Leaf_blight','Corn___Gray_leaf_spot'];label=a[Math.floor(Math.random()*a.length)];confidence=60+Math.round(Math.random()*12);}
     return {label,confidence,source:'LOCAL_CLASSIFIER',model:'CropSense-Local-v15'};
-  }catch(){ return {label:'Tomato___Early_blight',confidence:62,source:'LOCAL_CLASSIFIER',model:'CropSense-Local-v15'}; }
+  }catch(err){ return {label:'Tomato___Early_blight',confidence:62,source:'LOCAL_CLASSIFIER',model:'CropSense-Local-v15'}; }
 }
 
 /* GROQ EXPLANATION — FIXED model name */
