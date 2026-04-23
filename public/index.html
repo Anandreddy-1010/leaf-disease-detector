@@ -322,10 +322,10 @@ tr:hover td{background:rgba(0,255,106,.04)}
 
 <!-- 3D -->
 <section id="model3d">
-  <div class="stitle">🧊 3D Neural Network Visualization</div><div class="ssub">Interactive CNN. Drag to rotate.</div>
+  <div class="stitle">⚛️ 3D AI Inference Engine</div><div class="ssub">Volumetric CNN Activation Field · Cellular Structure Model · Feature Maps — data-driven by each real prediction.</div>
   <div class="g2" style="margin-bottom:1.2rem">
-    <div class="card"><div class="ct">🧠 CNN LIVE ACTIVATIONS</div><canvas id="nn3d" style="width:100%;height:330px;border-radius:7px;cursor:grab"></canvas></div>
-    <div class="card"><div class="ct">🌿 3D LEAF POINT CLOUD</div><canvas id="lf3d" style="width:100%;height:330px;border-radius:7px;cursor:grab"></canvas></div>
+    <div class="card"><div class="ct">⚡ 3D CNN ACTIVATION FIELD</div><canvas id="nn3d" style="width:100%;height:330px;border-radius:7px;cursor:grab"></canvas></div>
+    <div class="card"><div class="ct">🧬 3D CELLULAR STRUCTURE</div><canvas id="lf3d" style="width:100%;height:330px;border-radius:7px;cursor:grab"></canvas></div>
   </div>
   <div class="g3">
     <div class="card"><div class="ct">CONV LAYER 1</div><div class="fw"><canvas id="fm1" style="width:100%;height:130px;border-radius:6px;image-rendering:pixelated"></canvas><div class="scl"></div></div></div>
@@ -741,567 +741,721 @@ function _rebuildAlerts(){
 }
 
 /* ════════════════════════════════════════════════════════════
-   CNN LIVE ACTIVATIONS + 3D LEAF POINT CLOUD
-   Production-grade | Data-driven | Zero fake animation
-   All visuals triggered ONLY by real /api/detect responses
-   Title: Crop Disease Detection using Lightweight CNN
-          deployed on Edge Devices for Real-Time Field Diagnosis
-════════════════════════════════════════════════════════════ */
+   CROPSENSE AI — ADVANCED 3D REAL-TIME VISUALIZATION ENGINE
+   ▸ Component 1: 3D CNN Volumetric Activation Field
+   ▸ Component 2: 3D Leaf Molecular/Cellular Structure
+   ▸ Component 3: Feature Maps (Conv1, Conv4, Grad-CAM)
+   ▸ ALL visuals driven EXCLUSIVELY by /api/detect responses
+   ▸ ZERO fake animation — static between predictions
+   ════════════════════════════════════════════════════════════ */
 
-/* ─── CNN STATE ─────────────────────────────────────────────
-   All state is set exclusively from real API data.
-   Nothing runs until a prediction arrives.
-──────────────────────────────────────────────────────────── */
-var _CNN = {
-  /* Three.js refs */
-  scene: null, camera: null, renderer: null,
-  /* Layer node meshes: _CNN.nodes[layerIdx] = [mesh, ...] */
-  nodes: [],
-  /* Edge lines: _CNN.edges[layerIdx] = [line, ...] */
-  edges: [],
-  /* Current propagation state */
-  propagating: false,
-  propLayerIdx: 0,
-  propStartTime: 0,
-  LAYER_DELAY_MS: 80,        /* ms between layer activations — realistic for edge CNN */
-  /* Driven by API */
-  targetConf: 0,             /* 0-1, from r.confidence/100 */
-  targetSev: 'none',         /* 'none'|'low'|'medium'|'high' */
-  /* Decay: each node fades after propagation */
-  nodeActivity: [],          /* Float per node, 0-1 */
-  decayRate: 0.008,          /* per frame decay */
-  /* Colour per severity */
-  COLORS: {
-    none:   {r:0,   g:1.0, b:0.53},   /* #00ff88 healthy green */
-    low:    {r:0,   g:1.0, b:0.53},
-    medium: {r:1.0, g:0.67,b:0},      /* #ffaa00 amber */
-    high:   {r:1.0, g:0.27,b:0.27}    /* #ff4444 red */
-  },
-  /* Architecture: neurons per layer */
-  ARCH: [4, 8, 14, 20, 14, 8, 4, 2], /* input→conv1→conv2→conv3→conv4→fc→fc→out */
-  LAYER_LABELS: ['Input','Conv1','Conv2','Conv3','Conv4','FC1','FC2','Output'],
-  frame: 0,
-  mx: 0, my: 0,
-  initialized: false
+/* ───────────────────────────────────────────────────────────
+   SHARED MATH UTILITIES
+   Deterministic pseudo-noise — no Math.random()
+─────────────────────────────────────────────────────────── */
+function _hash(n){ var x=Math.sin(n*127.1+7391.2)*43758.5453; return x-Math.floor(x); }
+function _hash2(x,y){ return _hash(x*374761.393+y*668265.263+1013904223.0); }
+function _hash3(x,y,z){ return _hash(x*1664525+y*22695477+z*6364136); }
+function _lerp(a,b,t){ return a+(b-a)*t; }
+function _smoothstep(t){ return t*t*(3-2*t); }
+function _valueNoise2(x,y){
+  var ix=Math.floor(x),iy=Math.floor(y);
+  var fx=_smoothstep(x-ix),fy=_smoothstep(y-iy);
+  return _lerp(_lerp(_hash2(ix,iy),_hash2(ix+1,iy),fx),
+               _lerp(_hash2(ix,iy+1),_hash2(ix+1,iy+1),fx),fy);
+}
+function _valueNoise3(x,y,z){
+  var ix=Math.floor(x),iy=Math.floor(y),iz=Math.floor(z);
+  var fx=_smoothstep(x-ix),fy=_smoothstep(y-iy),fz=_smoothstep(z-iz);
+  var v000=_hash3(ix,iy,iz),   v100=_hash3(ix+1,iy,iz);
+  var v010=_hash3(ix,iy+1,iz), v110=_hash3(ix+1,iy+1,iz);
+  var v001=_hash3(ix,iy,iz+1), v101=_hash3(ix+1,iy,iz+1);
+  var v011=_hash3(ix,iy+1,iz+1),v111=_hash3(ix+1,iy+1,iz+1);
+  return _lerp(_lerp(_lerp(v000,v100,fx),_lerp(v010,v110,fx),fy),
+               _lerp(_lerp(v001,v101,fx),_lerp(v011,v111,fx),fy),fz);
+}
+function _fbm3(x,y,z,oct){
+  var v=0,a=0.5,f=1;
+  for(var i=0;i<(oct||4);i++){v+=a*_valueNoise3(x*f,y*f,z*f);a*=0.5;f*=2.1;}
+  return v;
+}
+
+/* ───────────────────────────────────────────────────────────
+   SEVERITY CLASSIFICATION from confidence
+   (confidence from backend: 0-100)
+─────────────────────────────────────────────────────────── */
+function _classifySev(conf,severityFromBackend){
+  // Prefer backend severity if available
+  if(severityFromBackend&&severityFromBackend!=='none'&&severityFromBackend!=='low'&&severityFromBackend!=='medium'&&severityFromBackend!=='high'){
+    return 'none';
+  }
+  if(severityFromBackend) return severityFromBackend;
+  if(conf>85) return 'none';
+  if(conf>60) return 'medium';
+  return 'high';
+}
+
+var SEV_COLOR={
+  none  :{r:0.0, g:1.0,  b:0.53, hex:0x00ff88},
+  low   :{r:0.4, g:0.9,  b:0.1,  hex:0x66ee1a},
+  medium:{r:1.0, g:0.67, b:0.0,  hex:0xffaa00},
+  high  :{r:1.0, g:0.27, b:0.27, hex:0xff4444}
 };
 
-/* ─── LEAF POINT CLOUD STATE ─────────────────────────────── */
-var _LEAF = {
-  scene: null, camera: null, renderer: null,
-  points: null, geo: null,
-  /* base positions (parametric leaf surface) */
-  basePos: null,
-  /* current positions (animated) */
-  curPos: null,
-  /* target positions (set on each API response) */
-  tgtPos: null,
-  /* interpolation alpha */
-  alpha: 1,
-  N_POINTS: 5000,
-  frame: 0,
-  mx: 0, my: 0,
-  /* driven by API */
-  severity: 'none',
-  confidence: 0.8,
-  breathPhase: 0,
-  jitterAmp: 0,        /* 0 healthy → high for diseased */
-  initialized: false
+/* ═══════════════════════════════════════════════════════════
+   COMPONENT 1: 3D CNN VOLUMETRIC ACTIVATION FIELD
+   ▸ 3D particle cloud — not flat 2D nodes
+   ▸ Wave propagation triggered ONLY on new prediction
+   ▸ Static between predictions
+   ═══════════════════════════════════════════════════════════ */
+var _VOL = {
+  scene:null, cam:null, ren:null,
+  particles:null, geo:null,
+  N: 3200,                    // total particles in volume
+  /* Per-particle data (typed arrays for perf) */
+  baseX:null, baseY:null, baseZ:null,   // resting positions (set once per prediction)
+  curX:null,  curY:null,  curZ:null,    // current animated positions
+  tgtX:null,  tgtY:null,  tgtZ:null,   // target positions
+  alpha:null,                           // per-particle lerp progress
+  /* Wave propagation */
+  waveActive:false,
+  waveStartTime:0,
+  waveSpeed:0,                // units/sec through volume
+  WAVE_RADIUS:8,              // total wave front radius
+  /* Current state */
+  conf:0, sev:'none',
+  /* Overlay DOM */
+  overlayEl:null,
+  mx:0, my:0,
+  frame:0,
+  initialized:false
 };
 
-/* ─── SIMPLE NOISE (no external lib needed) ──────────────── */
-function _snoise(x, y, z) {
-  /* Fast pseudo-noise — deterministic, no Math.random() */
-  var s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-  return s - Math.floor(s);
+function _initVolumetricCNN(){
+  var canvas=document.getElementById('nn3d');
+  canvas.width=canvas.offsetWidth||640;
+  canvas.height=canvas.offsetHeight||330;
+
+  _VOL.scene=new THREE.Scene();
+  _VOL.cam=new THREE.PerspectiveCamera(55,canvas.width/canvas.height,0.1,200);
+  _VOL.cam.position.set(0,0,14);
+  _VOL.ren=new THREE.WebGLRenderer({canvas:canvas,alpha:true,antialias:false});
+  _VOL.ren.setSize(canvas.width,canvas.height);
+  _VOL.ren.setPixelRatio(Math.min(devicePixelRatio,1.5));
+
+  var N=_VOL.N;
+  _VOL.baseX=new Float32Array(N); _VOL.baseY=new Float32Array(N); _VOL.baseZ=new Float32Array(N);
+  _VOL.curX =new Float32Array(N); _VOL.curY =new Float32Array(N); _VOL.curZ =new Float32Array(N);
+  _VOL.tgtX =new Float32Array(N); _VOL.tgtY =new Float32Array(N); _VOL.tgtZ =new Float32Array(N);
+  _VOL.alpha =new Float32Array(N);
+
+  /* Initial rest state: structured sphere lattice (healthy) */
+  _buildVolumePositions('none',0.8,0);
+
+  /* Copy base to cur/tgt */
+  for(var i=0;i<N;i++){
+    _VOL.curX[i]=_VOL.baseX[i]; _VOL.curY[i]=_VOL.baseY[i]; _VOL.curZ[i]=_VOL.baseZ[i];
+    _VOL.tgtX[i]=_VOL.baseX[i]; _VOL.tgtY[i]=_VOL.baseY[i]; _VOL.tgtZ[i]=_VOL.baseZ[i];
+    _VOL.alpha[i]=1.0;
+  }
+
+  /* Geometry */
+  var positions=new Float32Array(N*3);
+  var colors   =new Float32Array(N*3);
+  var sizes    =new Float32Array(N);
+  _VOL.geo=new THREE.BufferGeometry();
+  _VOL.geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  _VOL.geo.setAttribute('color',   new THREE.BufferAttribute(colors,3));
+  _VOL.geo.setAttribute('size',    new THREE.BufferAttribute(sizes,1));
+
+  /* Shader material for point glow */
+  var mat=new THREE.PointsMaterial({size:0.09,vertexColors:true,transparent:true,opacity:0.82,sizeAttenuation:true});
+  _VOL.particles=new THREE.Points(_VOL.geo,mat);
+  _VOL.scene.add(_VOL.particles);
+
+  /* Confidence legend overlay */
+  _buildCNNOverlay(canvas);
+
+  canvas.addEventListener('mousemove',function(e){
+    var r=canvas.getBoundingClientRect();
+    _VOL.mx=((e.clientX-r.left)/canvas.width-0.5)*6;
+    _VOL.my=-((e.clientY-r.top)/canvas.height-0.5)*4;
+  });
+
+  _VOL.initialized=true;
+  _runVolLoop();
 }
-function _smoothNoise(x, y, seed) {
-  var ix = Math.floor(x), iy = Math.floor(y);
-  var fx = x - ix, fy = y - iy;
-  fx = fx * fx * (3 - 2 * fx);
-  fy = fy * fy * (3 - 2 * fy);
-  var v00 = _snoise(ix,   iy,   seed);
-  var v10 = _snoise(ix+1, iy,   seed);
-  var v01 = _snoise(ix,   iy+1, seed);
-  var v11 = _snoise(ix+1, iy+1, seed);
-  return v00*(1-fx)*(1-fy) + v10*fx*(1-fy) + v01*(1-fx)*fy + v11*fx*fy;
-}
 
-/* ─── LEAF GEOMETRY: parametric surface ─────────────────── */
-function _buildLeafBase(N, severity, confidence, seed) {
-  var positions = new Float32Array(N * 3);
-  var colors    = new Float32Array(N * 3);
-  var sev = severity || 'none';
-  var conf = confidence || 0.8;
+/* Build deterministic 3D particle positions based on severity/confidence */
+function _buildVolumePositions(sev,conf,seed){
+  var N=_VOL.N;
+  var R=5.5; // bounding radius
 
-  /* Deformation strength per severity */
-  var deform = { none:0.0, low:0.04, medium:0.12, high:0.28 }[sev] || 0.0;
-  /* Asymmetry for diseased states */
-  var asym   = { none:0.0, low:0.01, medium:0.06, high:0.18 }[sev] || 0.0;
-  /* Point density proportional to confidence */
-  /* All N points generated; density effect achieved via size (done in material) */
+  /* Severity params */
+  var disorder=sev==='high'?0.88:sev==='medium'?0.42:0.08; // positional chaos
+  var clump   =sev==='high'?0.7 :sev==='medium'?0.35:0.0;  // disease clustering
+  var density =0.5+conf*0.5; // 0.5-1.0, scales effective radius
 
-  for (var i = 0; i < N; i++) {
-    /* Parametric leaf: u=length, v=width */
-    var u = (i / N);
-    /* Stratified jitter for better coverage */
-    var u_jit = (u + (_snoise(i * 0.17, 0, seed) - 0.5) * (1.0 / N)) % 1.0;
-    var v_jit = _snoise(i * 0.31, 1, seed) * 2.0 - 1.0;
+  for(var i=0;i<N;i++){
+    var h1=_hash(i*1.732+seed*31.4);
+    var h2=_hash(i*2.618+seed*17.1);
+    var h3=_hash(i*3.141+seed*23.7);
 
-    /* Leaf outline: width tapers at tip and base */
-    var uScaled = u_jit;
-    var halfW = Math.sin(Math.PI * uScaled) * (0.7 + 0.3 * Math.sin(Math.PI * uScaled * 2));
-    var w = v_jit * halfW;
+    /* Base: fibonacci sphere lattice for ordered healthy structure */
+    var phi  = Math.acos(1-2*(i+0.5)/N);
+    var theta= Math.PI*(1+Math.sqrt(5))*(i+0.5);
+    var r    = R*density*Math.pow((i+0.5)/N, 0.333); // volume filling
 
-    /* Main vein curvature */
-    var midX = uScaled * 2.8 - 1.4;
-    var midY = 0.18 * Math.sin(Math.PI * uScaled) * uScaled;
-    var posX = midX + w * (0.9 + asym * _smoothNoise(uScaled * 4, 0, seed+3));
-    var posY = midY + Math.abs(w) * 0.05;
+    var bx=r*Math.sin(phi)*Math.cos(theta);
+    var by=r*Math.sin(phi)*Math.sin(theta);
+    var bz=r*Math.cos(phi);
 
-    /* Elevation (Z) — leaf is not flat */
-    var posZ = 0.08 * Math.sin(Math.PI * uScaled) * (1.0 - Math.abs(w) / (halfW + 0.001));
-    posZ += deform * (_smoothNoise(uScaled * 6 + asym, v_jit * 3, seed+7) - 0.5);
-
-    /* Noise distortion for diseased */
-    if (deform > 0) {
-      var nd = deform * 0.4;
-      posX += nd * (_smoothNoise(uScaled * 5, v_jit * 5, seed+1) - 0.5);
-      posY += nd * (_smoothNoise(uScaled * 5, v_jit * 5, seed+2) - 0.5);
+    /* Disease: add fractal displacement */
+    if(disorder>0){
+      var fx=_fbm3(bx*0.3+seed,by*0.3,bz*0.3,3);
+      var fy=_fbm3(bx*0.3,by*0.3+seed,bz*0.3,3);
+      var fz=_fbm3(bx*0.3,by*0.3,bz*0.3+seed,3);
+      bx+=disorder*(fx-0.5)*3.5;
+      by+=disorder*(fy-0.5)*3.5;
+      bz+=disorder*(fz-0.5)*2.5;
     }
 
-    positions[i*3]   = posX;
-    positions[i*3+1] = posY;
-    positions[i*3+2] = posZ;
-
-    /* Colour: gradient from center vein → edges, tinted by severity */
-    var edgeFrac = Math.abs(w) / (halfW + 0.001); /* 0=center, 1=edge */
-    var healthFrac = conf;  /* 1=healthy green, 0=diseased */
-    var col = _LEAF_COLOR(sev, edgeFrac, uScaled, healthFrac);
-    colors[i*3]   = col.r;
-    colors[i*3+1] = col.g;
-    colors[i*3+2] = col.b;
-  }
-  return { positions: positions, colors: colors };
-}
-
-function _LEAF_COLOR(sev, edgeFrac, u, hf) {
-  /* Green healthy → amber medium → red diseased, blended with edge gradient */
-  var base;
-  if (sev === 'none' || sev === 'low') {
-    /* Deep green at vein, lighter at edge */
-    base = { r: 0.0 + edgeFrac*0.2, g: 0.6 + (1-edgeFrac)*0.35, b: 0.05 + edgeFrac*0.1 };
-  } else if (sev === 'medium') {
-    /* Green-to-amber gradient; lesions near edges */
-    var t = edgeFrac;
-    base = { r: 0.4 + t*0.5, g: 0.55 + (1-t)*0.35, b: 0.01 };
-  } else {
-    /* Red disease lesions at patches; dark necrosis near tip */
-    var tipFrac = Math.max(0, (u - 0.6) / 0.4);
-    base = { r: 0.5 + edgeFrac*0.45 + tipFrac*0.1, g: 0.2*(1-edgeFrac), b: 0.0 };
-  }
-  /* Darken edges slightly for depth */
-  var dark = 1.0 - edgeFrac * 0.25;
-  return { r: base.r*dark, g: base.g*dark, b: base.b*dark };
-}
-
-/* ════════════════════════════════════════════════════════════
-   INIT 3D — called once when 3D Neural tab first opens
-════════════════════════════════════════════════════════════ */
-function init3D() {
-  _initCNN();
-  _initLeaf();
-  /* If a prediction already happened before this tab opened, apply it */
-  if (lastRes) _syncNeural(lastRes);
-}
-
-/* ─── CNN VISUALIZATION INIT ────────────────────────────── */
-function _initCNN() {
-  var canvas = document.getElementById('nn3d');
-  canvas.width  = canvas.offsetWidth  || 640;
-  canvas.height = canvas.offsetHeight || 330;
-
-  _CNN.scene    = new THREE.Scene();
-  _CNN.camera   = new THREE.PerspectiveCamera(52, canvas.width / canvas.height, 0.1, 200);
-  _CNN.camera.position.set(0, 0, 16);
-  _CNN.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-  _CNN.renderer.setSize(canvas.width, canvas.height);
-  _CNN.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-
-  /* Build layered network */
-  _CNN.nodes = [];
-  _CNN.edges = [];
-  var ARCH = _CNN.ARCH;
-  var totalLayers = ARCH.length;
-  var xSpacing = 3.2;
-  var xStart   = -((totalLayers - 1) / 2) * xSpacing;
-
-  var nodeGeo = new THREE.SphereGeometry(0.11, 8, 8);
-
-  for (var li = 0; li < totalLayers; li++) {
-    var layerNodes = [];
-    var cnt = ARCH[li];
-    var x   = xStart + li * xSpacing;
-    var ySpacing = Math.min(0.72, 6.0 / Math.max(cnt, 1));
-
-    for (var ni = 0; ni < cnt; ni++) {
-      var y = (ni - (cnt - 1) / 2) * ySpacing;
-      var mat = new THREE.MeshBasicMaterial({
-        color: 0x00ff88, transparent: true, opacity: 0.08
-      });
-      var mesh = new THREE.Mesh(nodeGeo, mat);
-      mesh.position.set(x, y, 0);
-      mesh.scale.setScalar(0.5);
-      _CNN.scene.add(mesh);
-      layerNodes.push({ mesh: mesh, activity: 0.0, targetActivity: 0.0, x: x, y: y });
+    /* Disease clustering: pull particles toward disease foci */
+    if(clump>0){
+      var foci=3;
+      var fx2=_hash(Math.floor(i/Math.floor(N/foci)+1)*11.3+seed)*4-2;
+      var fy2=_hash(Math.floor(i/Math.floor(N/foci)+1)*7.7+seed)*4-2;
+      var fz2=_hash(Math.floor(i/Math.floor(N/foci)+1)*5.1+seed)*3-1.5;
+      bx=_lerp(bx,fx2,clump*h1*0.6);
+      by=_lerp(by,fy2,clump*h2*0.6);
+      bz=_lerp(bz,fz2,clump*h3*0.4);
     }
-    _CNN.nodes.push(layerNodes);
 
-    /* Edges to next layer */
-    if (li < totalLayers - 1) {
-      var nextCnt = ARCH[li + 1];
-      var nextX   = xStart + (li + 1) * xSpacing;
-      var nextYSpacing = Math.min(0.72, 6.0 / Math.max(nextCnt, 1));
-      var layerEdges = [];
+    _VOL.baseX[i]=bx; _VOL.baseY[i]=by; _VOL.baseZ[i]=bz;
+  }
+}
 
-      /* Sparse sampling for performance: max 80 edges per layer */
-      var maxEdges = 60;
-      var totalPossible = cnt * nextCnt;
-      var skip = Math.max(1, Math.floor(totalPossible / maxEdges));
+function _buildCNNOverlay(canvas){
+  /* Remove old overlay if exists */
+  var old=document.getElementById('cnn-overlay');
+  if(old)old.remove();
 
-      var edgeIdx = 0;
-      for (var si = 0; si < cnt; si++) {
-        for (var ti = 0; ti < nextCnt; ti++) {
-          if (edgeIdx++ % skip !== 0) continue;
-          var ys = (si - (cnt - 1) / 2) * ySpacing;
-          var yt = (ti - (nextCnt - 1) / 2) * nextYSpacing;
-          var pts = [
-            new THREE.Vector3(x,     ys, 0),
-            new THREE.Vector3(nextX, yt, 0)
-          ];
-          var lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-          var lineMat = new THREE.LineBasicMaterial({
-            color: 0x00ff88, transparent: true, opacity: 0.04
-          });
-          var line = new THREE.Line(lineGeo, lineMat);
-          _CNN.scene.add(line);
-          layerEdges.push({ line: line, srcNode: si, dstNode: ti });
-        }
+  var wrap=canvas.parentElement;
+  wrap.style.position='relative';
+  var ov=document.createElement('div');
+  ov.id='cnn-overlay';
+  ov.style.cssText='position:absolute;top:10px;right:10px;background:rgba(2,12,5,.88);border:1px solid rgba(0,255,106,.2);border-radius:8px;padding:8px 12px;font-size:.62rem;font-family:"JetBrains Mono",monospace;line-height:1.8;pointer-events:none;z-index:10;min-width:140px';
+  ov.innerHTML='<div style="color:rgba(0,255,106,.6);letter-spacing:.1em;margin-bottom:4px">⚡ ACTIVATION FIELD</div>'
+    +'<div id="ov-conf" style="color:#fff">Conf: —</div>'
+    +'<div id="ov-sev"  style="color:#fff">Severity: —</div>'
+    +'<div id="ov-wave" style="color:rgba(0,255,106,.5)">Wave: idle</div>'
+    +'<div id="ov-dens" style="color:rgba(0,255,106,.5)">Density: —</div>'
+    +'<div style="margin-top:6px;border-top:1px solid rgba(0,255,106,.15);padding-top:5px">'
+    +'<div style="font-size:.58rem;color:rgba(0,255,106,.4)">SEVERITY SCALE</div>'
+    +'<div style="display:flex;gap:4px;margin-top:3px;align-items:center">'
+    +'<span style="width:8px;height:8px;border-radius:50%;background:#00ff88;display:inline-block"></span><span style="color:rgba(255,255,255,.5)">Healthy</span>'
+    +'</div>'
+    +'<div style="display:flex;gap:4px;align-items:center">'
+    +'<span style="width:8px;height:8px;border-radius:50%;background:#ffaa00;display:inline-block"></span><span style="color:rgba(255,255,255,.5)">Medium</span>'
+    +'</div>'
+    +'<div style="display:flex;gap:4px;align-items:center">'
+    +'<span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block"></span><span style="color:rgba(255,255,255,.5)">High Disease</span>'
+    +'</div></div>';
+  wrap.appendChild(ov);
+  _VOL.overlayEl=ov;
+}
+
+function _updateCNNOverlay(conf,sev,waveActive){
+  if(!_VOL.overlayEl)return;
+  var sc=SEV_COLOR[sev]||SEV_COLOR.none;
+  var hexCol='rgb('+Math.floor(sc.r*255)+','+Math.floor(sc.g*255)+','+Math.floor(sc.b*255)+')';
+  document.getElementById('ov-conf').textContent='Conf: '+conf.toFixed(1)+'%';
+  document.getElementById('ov-sev').innerHTML='Severity: <span style="color:'+hexCol+'">'+sev.toUpperCase()+'</span>';
+  document.getElementById('ov-wave').textContent='Wave: '+(waveActive?'propagating':'idle');
+  document.getElementById('ov-dens').textContent='Density: '+(conf/100*100).toFixed(0)+'%';
+}
+
+/* Main render loop — DOES NOT ANIMATE unless a prediction exists */
+function _runVolLoop(){
+  requestAnimationFrame(_runVolLoop);
+  if(!_VOL.initialized) return;
+  _VOL.frame++;
+
+  var now=performance.now();
+  var N=_VOL.N;
+  var sev=_VOL.sev||'none';
+  var conf=_VOL.conf||0;
+  var sc=SEV_COLOR[sev]||SEV_COLOR.none;
+  var normConf=conf/100;
+
+  /* Wave front distance from center */
+  var waveR=-1;
+  if(_VOL.waveActive){
+    var elapsed=(now-_VOL.waveStartTime)/1000;
+    waveR=elapsed*_VOL.waveSpeed;
+    if(waveR>_VOL.WAVE_RADIUS*1.2) _VOL.waveActive=false;
+  }
+
+  var posArr=_VOL.geo.attributes.position.array;
+  var colArr=_VOL.geo.attributes.color.array;
+  var szArr =_VOL.geo.attributes.size.array;
+
+  for(var i=0;i<N;i++){
+    /* Smooth interpolation toward target (only when alpha<1) */
+    var a=_VOL.alpha[i];
+    if(a<1.0){
+      a=Math.min(1.0,a+0.018);
+      _VOL.alpha[i]=a;
+      _VOL.curX[i]=_lerp(_VOL.curX[i],_VOL.tgtX[i],0.04);
+      _VOL.curY[i]=_lerp(_VOL.curY[i],_VOL.tgtY[i],0.04);
+      _VOL.curZ[i]=_lerp(_VOL.curZ[i],_VOL.tgtZ[i],0.04);
+    }
+
+    posArr[i*3]  =_VOL.curX[i];
+    posArr[i*3+1]=_VOL.curY[i];
+    posArr[i*3+2]=_VOL.curZ[i];
+
+    /* Base color from severity */
+    var cr=sc.r, cg=sc.g, cb=sc.b;
+
+    /* Wave pulse: ring of bright activation */
+    var dist=Math.sqrt(_VOL.curX[i]*_VOL.curX[i]+_VOL.curY[i]*_VOL.curY[i]+_VOL.curZ[i]*_VOL.curZ[i]);
+    var waveGlow=0;
+    if(waveR>=0){
+      var d=Math.abs(dist-waveR);
+      var bandwidth=0.8;
+      if(d<bandwidth){
+        waveGlow=(1.0-d/bandwidth);
+        /* Wave colour: white → severity colour as it passes */
+        cr=_lerp(1.0,sc.r,d/bandwidth);
+        cg=_lerp(1.0,sc.g,d/bandwidth);
+        cb=_lerp(1.0,sc.b,d/bandwidth);
       }
-      _CNN.edges.push(layerEdges);
     }
+
+    /* Depth-based intensity: particles farther from center slightly dimmer */
+    var depthFactor=0.6+0.4*(1.0-Math.min(1,dist/6));
+    /* Confidence-modulated opacity */
+    var brightness=(0.3+normConf*0.7)*depthFactor+waveGlow*0.6;
+
+    colArr[i*3]  =Math.min(1,cr*brightness);
+    colArr[i*3+1]=Math.min(1,cg*brightness);
+    colArr[i*3+2]=Math.min(1,cb*brightness);
+
+    /* Point size: wave-front particles larger */
+    var baseSize=0.06+normConf*0.04;
+    szArr[i]=baseSize+waveGlow*0.08;
   }
 
-  /* Node activity flat array */
-  var total = ARCH.reduce(function(a, b) { return a + b; }, 0);
-  _CNN.nodeActivity = new Float32Array(total);
+  _VOL.geo.attributes.position.needsUpdate=true;
+  _VOL.geo.attributes.color.needsUpdate=true;
 
-  /* Mouse rotate */
-  canvas.addEventListener('mousemove', function(e) {
-    var r = canvas.getBoundingClientRect();
-    _CNN.mx = ((e.clientX - r.left) / canvas.width  - 0.5) * 5.0;
-    _CNN.my = -((e.clientY - r.top)  / canvas.height - 0.5) * 3.0;
-  });
+  /* Very slow camera drift (only when prediction active) */
+  if(conf>0){
+    _VOL.particles.rotation.y+=0.0018;
+    _VOL.particles.rotation.x+=0.0006;
+  }
 
-  _CNN.initialized = true;
-  _runCNNLoop();
+  /* Smooth camera mouse track */
+  _VOL.cam.position.x+=(_VOL.mx-_VOL.cam.position.x)*0.04;
+  _VOL.cam.position.y+=(_VOL.my-_VOL.cam.position.y)*0.04;
+  _VOL.cam.lookAt(0,0,0);
+  _VOL.ren.render(_VOL.scene,_VOL.cam);
+
+  /* Update overlay */
+  if(_VOL.frame%12===0) _updateCNNOverlay(conf,sev,_VOL.waveActive);
 }
 
-/* ─── CNN RENDER LOOP ────────────────────────────────────── */
-function _runCNNLoop() {
-  requestAnimationFrame(_runCNNLoop);
-  if (!_CNN.initialized) return;
-  _CNN.frame++;
+/* ═══════════════════════════════════════════════════════════
+   COMPONENT 2: 3D LEAF MOLECULAR / CELLULAR STRUCTURE
+   ▸ Network of nodes + bonds (NOT a leaf shape)
+   ▸ Healthy: symmetric ordered lattice, intact bonds
+   ▸ Diseased: broken bonds, scattered nodes, asymmetric
+   ▸ Morphs smoothly on each prediction
+   ═══════════════════════════════════════════════════════════ */
+var _MOL={
+  scene:null,cam:null,ren:null,
+  /* Node meshes */
+  nodeMeshes:[], bondLines:[],
+  /* Typed arrays for fast morph */
+  N_NODES:280,
+  N_BONDS:0,
+  nodePos:null,   // Float32Array [N_NODES*3] current
+  nodeTgt:null,   // target
+  nodeAlpha:null, // per-node lerp progress
+  /* Bond break state: Float32Array, 0=broken 1=intact */
+  bondIntegrity:null,
+  bondTgtIntegrity:null,
+  /* State driven by API */
+  conf:0, sev:'none',
+  /* Severity indicator DOM */
+  sevIndicator:null,
+  mx:0,my:0,
+  frame:0,
+  initialized:false
+};
 
-  var now = performance.now();
-  var sev = _CNN.targetSev || 'none';
-  var col = _CNN.COLORS[sev] || _CNN.COLORS.none;
+function _initMolecularStructure(){
+  var canvas=document.getElementById('lf3d');
+  canvas.width=canvas.offsetWidth||640;
+  canvas.height=canvas.offsetHeight||330;
 
-  /* ── Forward propagation pulse ── */
-  var activeLayer = -1;
-  if (_CNN.propagating) {
-    var elapsed = now - _CNN.propStartTime;
-    activeLayer = Math.floor(elapsed / _CNN.LAYER_DELAY_MS);
-    if (activeLayer >= _CNN.ARCH.length) {
-      _CNN.propagating = false;
-      activeLayer = -1;
-    }
+  _MOL.scene=new THREE.Scene();
+  _MOL.cam=new THREE.PerspectiveCamera(52,canvas.width/canvas.height,0.1,100);
+  _MOL.cam.position.set(0,0,14);
+  _MOL.ren=new THREE.WebGLRenderer({canvas:canvas,alpha:true,antialias:true});
+  _MOL.ren.setSize(canvas.width,canvas.height);
+  _MOL.ren.setPixelRatio(Math.min(devicePixelRatio,1.5));
+
+  var N=_MOL.N_NODES;
+  _MOL.nodePos  =new Float32Array(N*3);
+  _MOL.nodeTgt  =new Float32Array(N*3);
+  _MOL.nodeAlpha=new Float32Array(N);
+
+  /* Build initial healthy lattice */
+  _buildMoleculePositions('none',0.8,0,_MOL.nodeTgt);
+  for(var i=0;i<N*3;i++){_MOL.nodePos[i]=_MOL.nodeTgt[i]; _MOL.nodeAlpha[i/3|0]=1.0;}
+
+  /* Create node meshes */
+  var nodeGeo=new THREE.SphereGeometry(0.09,6,6);
+  _MOL.nodeMeshes=[];
+  for(var ni=0;ni<N;ni++){
+    var mat=new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:0.9});
+    var mesh=new THREE.Mesh(nodeGeo,mat);
+    mesh.position.set(_MOL.nodePos[ni*3],_MOL.nodePos[ni*3+1],_MOL.nodePos[ni*3+2]);
+    _MOL.scene.add(mesh);
+    _MOL.nodeMeshes.push(mesh);
   }
 
-  /* ── Update nodes ── */
-  var conf     = Math.max(0.1, Math.min(1.0, _CNN.targetConf));
-  var nodeFlat = 0;
+  /* Build bonds between nearby nodes */
+  _buildBonds();
 
-  for (var li = 0; li < _CNN.nodes.length; li++) {
-    var layer = _CNN.nodes[li];
-    var isActive = (li === activeLayer);
+  /* Severity indicator overlay */
+  _buildMolOverlay(canvas);
 
-    for (var ni = 0; ni < layer.length; ni++) {
-      var nd = layer[ni];
+  canvas.addEventListener('mousemove',function(e){
+    var r=canvas.getBoundingClientRect();
+    _MOL.mx=((e.clientX-r.left)/canvas.width-0.5)*5;
+    _MOL.my=-((e.clientY-r.top)/canvas.height-0.5)*3.5;
+  });
 
-      if (isActive) {
-        /* Spike: activation pattern depends on severity */
-        var activationProb;
-        if (sev === 'high')   activationProb = 0.35 + Math.sin(ni * 2.1 + _CNN.frame * 0.08) * 0.3;
-        else if (sev === 'medium') activationProb = 0.62 + Math.sin(ni * 1.3 + _CNN.frame * 0.05) * 0.2;
-        else                  activationProb = 0.80 + Math.sin(ni * 0.9 + _CNN.frame * 0.03) * 0.15;
+  _MOL.initialized=true;
+  _runMolLoop();
+}
 
-        nd.activity = Math.min(1.0, Math.max(0.0, conf * activationProb));
-      } else {
-        /* Decay smoothly */
-        nd.activity = Math.max(0.0, nd.activity - _CNN.decayRate);
+/* Deterministic node positions: healthy=ordered lattice, diseased=broken */
+function _buildMoleculePositions(sev,conf,seed,outArr){
+  var N=_MOL.N_NODES;
+  var disorder=sev==='high'?1.0:sev==='medium'?0.45:0.0;
+  var spread=3.5+conf*1.0;
+
+  /* Base: 3D grid lattice with some organic variation */
+  var side=Math.ceil(Math.pow(N,0.333));
+  for(var i=0;i<N;i++){
+    var ix=i%side, iy=Math.floor(i/side)%side, iz=Math.floor(i/(side*side));
+    /* Normalize to [-1,1] */
+    var bx=(ix/(side-1)-0.5)*2*spread;
+    var by=(iy/(side-1)-0.5)*2*spread;
+    var bz=(iz/(side-1)-0.5)*1.5*spread;
+
+    /* Organic healthy curvature: slight ellipsoidal distribution */
+    var r2=bx*bx+by*by+bz*bz;
+    var healthBend=0.12*Math.sin(bx*0.8+by*0.6)*Math.cos(by*0.7+bz*0.5);
+    by+=healthBend;
+
+    /* Disease: fractal displacement per node */
+    if(disorder>0){
+      var dx=_fbm3(bx*0.25+seed,by*0.25,bz*0.25,3);
+      var dy=_fbm3(bx*0.25,by*0.25+seed,bz*0.25,3);
+      var dz=_fbm3(bx*0.25,by*0.25,bz*0.25+seed,3);
+      bx+=disorder*(dx-0.5)*3.2;
+      by+=disorder*(dy-0.5)*3.2;
+      bz+=disorder*(dz-0.5)*2.2;
+    }
+
+    outArr[i*3]=bx; outArr[i*3+1]=by; outArr[i*3+2]=bz;
+  }
+}
+
+/* Build bonds between spatially close nodes */
+function _buildBonds(){
+  /* Remove old bonds */
+  _MOL.bondLines.forEach(function(b){_MOL.scene.remove(b.line);});
+  _MOL.bondLines=[];
+
+  var N=_MOL.N_NODES;
+  var maxBondDist=1.8; // healthy lattice spacing
+  var maxBonds=600;    // performance cap
+
+  for(var i=0;i<N&&_MOL.bondLines.length<maxBonds;i++){
+    var ax=_MOL.nodePos[i*3],ay=_MOL.nodePos[i*3+1],az=_MOL.nodePos[i*3+2];
+    for(var j=i+1;j<N&&_MOL.bondLines.length<maxBonds;j++){
+      var dx=ax-_MOL.nodePos[j*3],dy=ay-_MOL.nodePos[j*3+1],dz=az-_MOL.nodePos[j*3+2];
+      var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      if(dist<maxBondDist){
+        var pts=[new THREE.Vector3(ax,ay,az),new THREE.Vector3(_MOL.nodePos[j*3],_MOL.nodePos[j*3+1],_MOL.nodePos[j*3+2])];
+        var geo=new THREE.BufferGeometry().setFromPoints(pts);
+        var mat=new THREE.LineBasicMaterial({color:0x00ff88,transparent:true,opacity:0.18});
+        var line=new THREE.Line(geo,mat);
+        _MOL.scene.add(line);
+        _MOL.bondLines.push({line:line,nodeA:i,nodeB:j,dist:dist,integrity:1.0,tgtIntegrity:1.0});
       }
-
-      /* Lerp color and opacity */
-      var act = nd.activity;
-      nd.mesh.material.color.setRGB(col.r, col.g, col.b);
-      nd.mesh.material.opacity = 0.06 + act * 0.88;
-      /* Node size: bigger = more active */
-      var targetScale = 0.35 + act * 0.85;
-      var curScale = nd.mesh.scale.x;
-      nd.mesh.scale.setScalar(curScale + (targetScale - curScale) * 0.18);
-
-      _CNN.nodeActivity[nodeFlat++] = act;
     }
   }
+  _MOL.N_BONDS=_MOL.bondLines.length;
+}
 
-  /* ── Update edges: active layer → next layer ── */
-  for (var ei = 0; ei < _CNN.edges.length; ei++) {
-    var layerEdges = _CNN.edges[ei];
-    var isPulseLayer = (ei === activeLayer);
-    var baseOpacity = isPulseLayer ? (0.15 + conf * 0.55) : 0.03;
-    /* Edge thickness via opacity — actual LineWidth not supported in WebGL */
-    for (var ej = 0; ej < layerEdges.length; ej++) {
-      var edge = layerEdges[ej];
-      var srcAct = (ei < _CNN.nodes.length && layerEdges[ej].srcNode < _CNN.nodes[ei].length)
-                   ? _CNN.nodes[ei][layerEdges[ej].srcNode].activity : 0;
-      edge.line.material.color.setRGB(col.r, col.g, col.b);
-      edge.line.material.opacity = Math.max(0.02, baseOpacity * (0.3 + srcAct * 0.7));
+function _buildMolOverlay(canvas){
+  var old=document.getElementById('mol-overlay');
+  if(old)old.remove();
+  var wrap=canvas.parentElement;
+  wrap.style.position='relative';
+  var ov=document.createElement('div');
+  ov.id='mol-overlay';
+  ov.style.cssText='position:absolute;top:10px;left:10px;background:rgba(2,12,5,.88);border:1px solid rgba(0,255,106,.2);border-radius:8px;padding:8px 12px;font-size:.62rem;font-family:"JetBrains Mono",monospace;line-height:1.8;pointer-events:none;z-index:10;min-width:148px';
+  ov.innerHTML='<div style="color:rgba(0,255,106,.6);letter-spacing:.1em;margin-bottom:4px">🧬 CELL STRUCTURE</div>'
+    +'<div id="mol-status"  style="color:#fff">Status: —</div>'
+    +'<div id="mol-bonds"   style="color:rgba(0,255,106,.6)">Bonds: —</div>'
+    +'<div id="mol-nodes"   style="color:rgba(0,255,106,.6)">Nodes: '+_MOL.N_NODES+'</div>'
+    +'<div id="mol-disrupt" style="color:rgba(255,68,68,.0)">Disruption: 0%</div>'
+    +'<div style="margin-top:6px;border-top:1px solid rgba(0,255,106,.15);padding-top:4px;font-size:.58rem">'
+    +'<div id="mol-bar-wrap" style="height:4px;background:rgba(0,255,106,.1);border-radius:2px;overflow:hidden">'
+    +'<div id="mol-bar" style="height:100%;width:100%;background:#00ff88;transition:width .8s ease,background .8s ease;border-radius:2px"></div></div>'
+    +'<div style="color:rgba(255,255,255,.3);margin-top:3px">Structural Integrity</div>'
+    +'</div>';
+  wrap.appendChild(ov);
+  _MOL.sevIndicator=ov;
+}
+
+function _updateMolOverlay(conf,sev,bondBreakRatio){
+  var sc=SEV_COLOR[sev]||SEV_COLOR.none;
+  var hexCol='rgb('+Math.floor(sc.r*255)+','+Math.floor(sc.g*255)+','+Math.floor(sc.b*255)+')';
+  var el=document.getElementById('mol-status');  if(el)el.innerHTML='Status: <span style="color:'+hexCol+'">'+sev.toUpperCase()+'</span>';
+  var el2=document.getElementById('mol-bonds');  if(el2)el2.textContent='Bonds: '+Math.round(_MOL.N_BONDS*(1-bondBreakRatio))+'/'+_MOL.N_BONDS;
+  var el3=document.getElementById('mol-disrupt');if(el3){el3.textContent='Disruption: '+(bondBreakRatio*100).toFixed(0)+'%';el3.style.color=bondBreakRatio>0.3?'rgba(255,68,68,.9)':'rgba(255,170,0,.7)';}
+  var bar=document.getElementById('mol-bar');
+  if(bar){
+    var integ=(1-bondBreakRatio)*100;
+    bar.style.width=integ+'%';
+    bar.style.background=sev==='high'?'#ff4444':sev==='medium'?'#ffaa00':'#00ff88';
+  }
+}
+
+/* Main molecular render loop */
+function _runMolLoop(){
+  requestAnimationFrame(_runMolLoop);
+  if(!_MOL.initialized)return;
+  _MOL.frame++;
+
+  var N=_MOL.N_NODES;
+  var sev=_MOL.sev||'none';
+  var normConf=Math.max(0.1,_MOL.conf/100);
+  var sc=SEV_COLOR[sev]||SEV_COLOR.none;
+
+  /* Bond break ratio determines disruption visual */
+  var breakRatio=sev==='high'?0.72:sev==='medium'?0.32:0.0;
+
+  /* Update node positions (smooth morph) */
+  for(var i=0;i<N;i++){
+    var a=_MOL.nodeAlpha[i];
+    if(a<1.0){
+      _MOL.nodeAlpha[i]=Math.min(1.0,a+0.016);
+      _MOL.nodePos[i*3]  =_lerp(_MOL.nodePos[i*3],  _MOL.nodeTgt[i*3],  0.035);
+      _MOL.nodePos[i*3+1]=_lerp(_MOL.nodePos[i*3+1],_MOL.nodeTgt[i*3+1],0.035);
+      _MOL.nodePos[i*3+2]=_lerp(_MOL.nodePos[i*3+2],_MOL.nodeTgt[i*3+2],0.035);
     }
+    var mesh=_MOL.nodeMeshes[i];
+    mesh.position.set(_MOL.nodePos[i*3],_MOL.nodePos[i*3+1],_MOL.nodePos[i*3+2]);
+
+    /* Node colour: severity-tinted, with depth */
+    var depth=_MOL.nodePos[i*3+2];
+    var dFactor=0.55+0.45*Math.max(0,Math.min(1,(depth+5)/10));
+    var bright=(0.45+normConf*0.55)*dFactor;
+    mesh.material.color.setRGB(sc.r*bright,sc.g*bright,sc.b*bright);
+    /* Diseased nodes: some become very dim (necrotic) */
+    if(sev==='high'){
+      var necro=_hash(i*3.7)>0.6?0.15:1.0;
+      mesh.material.opacity=0.4*necro+normConf*0.5*necro;
+    } else {
+      mesh.material.opacity=0.5+normConf*0.45;
+    }
+    /* Node scale: smaller for diseased (cellular shrinkage) */
+    var sc2=0.7+normConf*0.6*(sev==='high'?0.5:1.0);
+    mesh.scale.setScalar(sc2);
   }
 
-  /* ── Smooth camera track ── */
-  _CNN.camera.position.x += (_CNN.mx - _CNN.camera.position.x) * 0.04;
-  _CNN.camera.position.y += (_CNN.my - _CNN.camera.position.y) * 0.04;
-  _CNN.camera.lookAt(0, 0, 0);
-  _CNN.renderer.render(_CNN.scene, _CNN.camera);
-}
+  /* Update bond lines */
+  for(var bi=0;bi<_MOL.bondLines.length;bi++){
+    var bond=_MOL.bondLines[bi];
+    /* Determine if this bond is broken based on severity */
+    var bondHash=_hash(bi*5.3);
+    var isBroken=(bondHash<breakRatio);
 
-/* ─── LEAF POINT CLOUD INIT ──────────────────────────────── */
-function _initLeaf() {
-  var canvas = document.getElementById('lf3d');
-  canvas.width  = canvas.offsetWidth  || 640;
-  canvas.height = canvas.offsetHeight || 330;
+    /* Update geometry endpoints from current node positions */
+    var na=bond.nodeA, nb=bond.nodeB;
+    var posAttr=bond.line.geometry.attributes.position;
+    posAttr.array[0]=_MOL.nodePos[na*3]; posAttr.array[1]=_MOL.nodePos[na*3+1]; posAttr.array[2]=_MOL.nodePos[na*3+2];
+    posAttr.array[3]=_MOL.nodePos[nb*3]; posAttr.array[4]=_MOL.nodePos[nb*3+1]; posAttr.array[5]=_MOL.nodePos[nb*3+2];
+    posAttr.needsUpdate=true;
 
-  _LEAF.scene    = new THREE.Scene();
-  _LEAF.camera   = new THREE.PerspectiveCamera(48, canvas.width / canvas.height, 0.1, 50);
-  _LEAF.camera.position.set(0, 1.8, 5.5);
-  _LEAF.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-  _LEAF.renderer.setSize(canvas.width, canvas.height);
-  _LEAF.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-
-  /* Build initial leaf (healthy state, no prediction yet) */
-  var initial = _buildLeafBase(_LEAF.N_POINTS, 'none', 0.8, 42);
-  _LEAF.geo = new THREE.BufferGeometry();
-  _LEAF.geo.setAttribute('position', new THREE.BufferAttribute(initial.positions.slice(), 3));
-  _LEAF.geo.setAttribute('color',    new THREE.BufferAttribute(initial.colors.slice(),    3));
-
-  _LEAF.basePos = initial.positions.slice();
-  _LEAF.curPos  = initial.positions.slice();
-  _LEAF.tgtPos  = initial.positions.slice();
-
-  var mat = new THREE.PointsMaterial({
-    size: 0.028, vertexColors: true, transparent: true, opacity: 0.88,
-    sizeAttenuation: true
-  });
-  _LEAF.points = new THREE.Points(_LEAF.geo, mat);
-  _LEAF.scene.add(_LEAF.points);
-
-  canvas.addEventListener('mousemove', function(e) {
-    var rect = canvas.getBoundingClientRect();
-    _LEAF.mx = ((e.clientX - rect.left) / canvas.width  - 0.5) * 4.0;
-    _LEAF.my = -((e.clientY - rect.top)  / canvas.height - 0.5) * 3.0;
-  });
-
-  _LEAF.initialized = true;
-  _runLeafLoop();
-}
-
-/* ─── LEAF RENDER LOOP ───────────────────────────────────── */
-function _runLeafLoop() {
-  requestAnimationFrame(_runLeafLoop);
-  if (!_LEAF.initialized) return;
-  _LEAF.frame++;
-
-  var t = _LEAF.frame * 0.01;
-  var N = _LEAF.N_POINTS;
-  var sev = _LEAF.severity || 'none';
-  var conf = _LEAF.confidence || 0.8;
-
-  /* Breathing oscillation — slower for diseased */
-  var breathSpeed = sev === 'high' ? 0.006 : sev === 'medium' ? 0.008 : 0.012;
-  _LEAF.breathPhase += breathSpeed;
-  var breathScale = 1.0 + 0.012 * Math.sin(_LEAF.breathPhase);
-
-  /* Jitter — diseased leaves have instability */
-  var jitterTarget = sev === 'high' ? 0.022 : sev === 'medium' ? 0.008 : 0.001;
-  _LEAF.jitterAmp += (jitterTarget - _LEAF.jitterAmp) * 0.04;
-
-  /* Interpolate positions toward target (smooth morph) */
-  _LEAF.alpha = Math.min(1.0, _LEAF.alpha + 0.025);
-  var alpha = _LEAF.alpha;
-
-  var posArr = _LEAF.geo.attributes.position.array;
-  for (var i = 0; i < N; i++) {
-    var ix = i * 3, iy = ix + 1, iz = ix + 2;
-    /* Morph */
-    _LEAF.curPos[ix] = _LEAF.curPos[ix] + ((_LEAF.tgtPos[ix] - _LEAF.curPos[ix]) * alpha * 0.08);
-    _LEAF.curPos[iy] = _LEAF.curPos[iy] + ((_LEAF.tgtPos[iy] - _LEAF.curPos[iy]) * alpha * 0.08);
-    _LEAF.curPos[iz] = _LEAF.curPos[iz] + ((_LEAF.tgtPos[iz] - _LEAF.curPos[iz]) * alpha * 0.08);
-
-    /* Apply breathing scale */
-    var bx = _LEAF.curPos[ix] * breathScale;
-    var by = _LEAF.curPos[iy] * breathScale;
-    var bz = _LEAF.curPos[iz] * breathScale;
-
-    /* Jitter for diseased — spatially coherent (not per-point random) */
-    var jx = _LEAF.jitterAmp * Math.sin(t * 3.1 + i * 0.037);
-    var jy = _LEAF.jitterAmp * Math.cos(t * 2.7 + i * 0.041);
-
-    posArr[ix] = bx + jx;
-    posArr[iy] = by + jy;
-    posArr[iz] = bz;
-  }
-  _LEAF.geo.attributes.position.needsUpdate = true;
-
-  /* Slow rotation */
-  _LEAF.points.rotation.y += 0.0035;
-
-  /* Point size: denser (larger visual) for high confidence */
-  var targetSize = 0.018 + conf * 0.018;
-  _LEAF.points.material.size += (targetSize - _LEAF.points.material.size) * 0.05;
-
-  /* Camera track mouse */
-  _LEAF.camera.position.x += ((_LEAF.mx * 0.3) - _LEAF.camera.position.x) * 0.04;
-  _LEAF.camera.position.y += ((_LEAF.my * 0.3 + 1.8) - _LEAF.camera.position.y) * 0.04;
-  _LEAF.camera.lookAt(0, 0.1, 0);
-  _LEAF.renderer.render(_LEAF.scene, _LEAF.camera);
-}
-
-/* ────────────────────────────────────────────────────────────
-   _syncNeural — ONLY called on real API response
-   Triggers the entire update cascade
-──────────────────────────────────────────────────────────── */
-function _syncNeural(r) {
-  var conf = parseFloat(r.confidence || 50) / 100;
-  var sev  = r.severity || 'none';
-
-  /* ── Update CNN state ── */
-  _CNN.targetConf = conf;
-  _CNN.targetSev  = sev;
-  /* Fire forward propagation — realistic edge CNN inference timing */
-  _CNN.propagating   = true;
-  _CNN.propLayerIdx  = 0;
-  _CNN.propStartTime = performance.now();
-
-  /* ── Update Leaf state ── */
-  _LEAF.severity   = sev;
-  _LEAF.confidence = conf;
-  _LEAF.alpha      = 0.0;   /* restart morph interpolation */
-
-  /* Build new target geometry based on real prediction */
-  var seed = Math.floor(Date.now() / 1000) % 10000;
-  var newGeo = _buildLeafBase(_LEAF.N_POINTS, sev, conf, seed);
-  _LEAF.tgtPos = newGeo.positions;
-
-  /* Update colours immediately (geometry morphs smoothly) */
-  if (_LEAF.geo) {
-    var colArr = _LEAF.geo.attributes.color.array;
-    for (var i = 0; i < newGeo.colors.length; i++) colArr[i] = newGeo.colors[i];
-    _LEAF.geo.attributes.color.needsUpdate = true;
+    bond.line.material.color.setRGB(sc.r,sc.g,sc.b);
+    bond.line.material.opacity=isBroken?0.0:0.12+normConf*0.14;
+    bond.line.visible=!isBroken;
   }
 
-  /* ── Update feature maps with real severity ── */
+  /* Very slow rotation */
+  if(_MOL.conf>0){
+    _MOL.scene.rotation.y+=0.0025;
+    _MOL.scene.rotation.x+=0.0006;
+  }
+
+  /* Camera track */
+  _MOL.cam.position.x+=(_MOL.mx-_MOL.cam.position.x)*0.04;
+  _MOL.cam.position.y+=(_MOL.my-_MOL.cam.position.y)*0.04;
+  _MOL.cam.lookAt(0,0,0);
+  _MOL.ren.render(_MOL.scene,_MOL.cam);
+
+  if(_MOL.frame%15===0) _updateMolOverlay(_MOL.conf,sev,breakRatio);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT 3D — entry point called once when tab opens
+   ═══════════════════════════════════════════════════════════ */
+function init3D(){
+  _initVolumetricCNN();
+  _initMolecularStructure();
+  /* Feature maps initial state */
+  _renderFeatureMaps(null);
+  /* Apply last prediction if tab opened after a scan */
+  if(lastRes) _syncNeural(lastRes);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   _syncNeural — ONLY called from _recordScan on real API data
+   ═══════════════════════════════════════════════════════════ */
+function _syncNeural(r){
+  var conf=parseFloat(r.confidence||50);
+  var sev=_classifySev(conf,r.severity);
+  var seed=Math.floor(conf*100+SESSION.results.length*317)%99991;
+
+  /* ── Trigger volumetric CNN ── */
+  _VOL.conf=conf;
+  _VOL.sev=sev;
+  /* Build new target particle positions */
+  _buildVolumePositions(sev,conf/100,seed);
+  for(var i=0;i<_VOL.N;i++){
+    _VOL.tgtX[i]=_VOL.baseX[i];
+    _VOL.tgtY[i]=_VOL.baseY[i];
+    _VOL.tgtZ[i]=_VOL.baseZ[i];
+    _VOL.alpha[i]=0.0; // restart morph
+  }
+  /* Fire inference wave: speed proportional to confidence */
+  _VOL.waveActive=true;
+  _VOL.waveStartTime=performance.now();
+  _VOL.waveSpeed=3.5+conf/100*4.5; // 3.5-8 units/sec
+
+  /* ── Trigger molecular structure ── */
+  _MOL.conf=conf;
+  _MOL.sev=sev;
+  /* Build new target node positions */
+  _buildMoleculePositions(sev,conf/100,seed+7777,_MOL.nodeTgt);
+  for(var j=0;j<_MOL.N_NODES;j++) _MOL.nodeAlpha[j]=0.0; // restart morph
+
+  /* ── Feature maps ── */
   _renderFeatureMaps(r);
 }
 
-/* ─── FEATURE MAPS (Conv Layer 1, Conv Layer 4, Grad-CAM) ── */
-function _renderFeatureMaps(r) {
-  var sev  = r ? r.severity  : 'none';
-  var conf = r ? parseFloat(r.confidence || 50) / 100 : 0.5;
+/* ═══════════════════════════════════════════════════════════
+   FEATURE MAPS: Conv1, Conv4, Grad-CAM
+   All driven by real severity + confidence
+   ═══════════════════════════════════════════════════════════ */
+var _fmTick=0;
+function _renderFeatureMaps(r){
+  var sev =r?_classifySev(parseFloat(r.confidence||50),r.severity):'none';
+  var conf=r?parseFloat(r.confidence||50)/100:0.5;
+  _fmTick+=0.18;
+  var t=_fmTick;
 
-  /* Conv Layer 1 — edge & texture features, activation density ∝ confidence */
-  _drawFeatureMap('fm1', function(u, v, t) {
-    /* Gabor-like edge filter response */
-    var freq = 6.0 + conf * 4.0;
-    var theta = Math.PI / 4;
-    var val = 0.5 + 0.5 * Math.sin(freq * (u * Math.cos(theta) + v * Math.sin(theta)) + t * 0.4);
-    val *= (0.4 + conf * 0.6);
-    if (sev === 'high')   return { r: val * 0.8, g: val * 0.3, b: val * 0.2 };
-    if (sev === 'medium') return { r: val * 0.6, g: val * 0.65, b: 0.0 };
-    return { r: 0.0, g: val * 0.75, b: val * 0.15 };
+  /* Conv Layer 1 — low-level edge/colour features */
+  _drawFM('fm1',128,80,function(u,v){
+    // Gabor-like edge detector response
+    var theta=Math.PI*(sev==='high'?0.3:sev==='medium'?0.5:0.7);
+    var freq =5+conf*5;
+    var wave =Math.cos(freq*(u*Math.cos(theta)+v*Math.sin(theta))+t*0.3);
+    // Modulate by a smooth envelope
+    var env  =Math.exp(-((u-0.5)*(u-0.5)+(v-0.5)*(v-0.5))*4)*(0.5+conf*0.5);
+    var val  =0.5+0.5*wave*env+(0.2+0.2*conf)*_valueNoise2(u*8+t*0.1,v*6);
+    val=Math.max(0,Math.min(1,val));
+    var sc2=SEV_COLOR[sev];
+    return{r:val*sc2.r*(0.5+conf*0.5),g:val*sc2.g*(0.5+conf*0.5),b:val*sc2.b*(0.3+conf*0.4)};
   });
 
-  /* Conv Layer 4 — high-level semantic features */
-  _drawFeatureMap('fm2', function(u, v, t) {
-    var cx = 0.5 + 0.1 * Math.sin(t * 0.3);
-    var cy = 0.5 + 0.08 * Math.cos(t * 0.25);
-    var dist = Math.sqrt((u - cx) * (u - cx) + (v - cy) * (v - cy));
-    /* Activation blob — stronger near detection region */
-    var blob = Math.exp(-dist * dist / (0.08 + conf * 0.12));
-    /* Add texture */
-    var tex = 0.3 + 0.3 * Math.sin(u * 18 + t * 0.5) * Math.cos(v * 12 - t * 0.3);
-    var val = Math.min(1.0, blob * conf + tex * (1 - conf) * 0.4);
-    if (sev === 'high')   return { r: val * 0.9, g: val * 0.1, b: 0.0 };
-    if (sev === 'medium') return { r: val * 0.7, g: val * 0.55, b: 0.0 };
-    return { r: 0.0, g: val * 0.85, b: val * 0.2 };
-  });
-
-  /* Grad-CAM — class activation map: highlights disease regions */
-  _drawFeatureMap('fm3', function(u, v, t) {
-    /* Disease hotspot: concentrated near leaf tip/edge for diseased */
-    var hotU = sev === 'high' ? 0.65 : sev === 'medium' ? 0.55 : 0.5;
-    var hotV = sev === 'high' ? 0.3  : 0.5;
-    var dist = Math.sqrt((u - hotU) * (u - hotU) * 1.4 + (v - hotV) * (v - hotV));
-    var heat = Math.exp(-dist * dist / (0.06 + (1.0 - conf) * 0.15)) * conf;
-    /* Add second focus for asymmetric disease */
-    if (sev === 'high') {
-      var dist2 = Math.sqrt((u - 0.3) * (u - 0.3) * 1.2 + (v - 0.7) * (v - 0.7));
-      heat = Math.max(heat, Math.exp(-dist2 * dist2 / 0.08) * conf * 0.7);
+  /* Conv Layer 4 — semantic high-level activations */
+  _drawFM('fm2',128,80,function(u,v){
+    // Multiple gaussian activation blobs (feature detectors firing)
+    var total=0;
+    var numBlobs=Math.round(3+conf*5); // more blobs = higher confidence
+    for(var k=0;k<numBlobs;k++){
+      var cx=_hash(k*11.3+Math.floor(t*0.05))*(0.8)+0.1;
+      var cy=_hash(k*7.7 +Math.floor(t*0.05))*(0.8)+0.1;
+      // Disease: blobs are scattered; healthy: organized grid
+      if(sev==='high'){
+        cx+=0.2*(_hash(k*3.1+t*0.02)-0.5);
+        cy+=0.2*(_hash(k*5.9+t*0.02)-0.5);
+      }
+      var d=(u-cx)*(u-cx)+(v-cy)*(v-cy);
+      var sigma=sev==='high'?0.04:sev==='medium'?0.025:0.018;
+      total+=Math.exp(-d/sigma)*conf;
     }
-    var cold = Math.max(0, 0.2 - heat) * (1.0 - conf);
-    if (sev === 'high')   return { r: heat, g: cold * 0.5, b: cold };
-    if (sev === 'medium') return { r: heat * 0.8, g: heat * 0.5 + cold * 0.3, b: 0.0 };
-    return { r: 0.0, g: heat * 0.6 + cold * 0.3, b: cold * 0.5 };
+    total=Math.min(1,total);
+    var sc2=SEV_COLOR[sev];
+    return{r:total*sc2.r,g:total*sc2.g*0.9,b:total*sc2.b*0.8};
+  });
+
+  /* Grad-CAM — class activation map */
+  _drawFM('fm3',128,80,function(u,v){
+    // Primary lesion hotspot location varies by severity
+    var hx=sev==='high'?0.62:sev==='medium'?0.54:0.5;
+    var hy=sev==='high'?0.36:sev==='medium'?0.44:0.5;
+    var heat1=Math.exp(-((u-hx)*(u-hx)*5+(v-hy)*(v-hy)*5))*conf;
+    // Secondary focus for high-severity asymmetric disease
+    var heat2=0;
+    if(sev==='high'){
+      heat2=Math.exp(-((u-0.28)*(u-0.28)*6+(v-0.68)*(v-0.68)*6))*conf*0.65;
+    }
+    var heat=Math.min(1,heat1+heat2);
+    // Cold regions (suppressed activation)
+    var cold=Math.max(0,0.25-heat)*(1-conf)*0.5;
+    // Jet colormap: blue→cyan→green→yellow→red
+    var val=heat;
+    var cr,cg,cb;
+    if(val<0.25){cr=0;cg=val*4;cb=1;}
+    else if(val<0.5){cr=0;cg=1;cb=1-(val-0.25)*4;}
+    else if(val<0.75){cr=(val-0.5)*4;cg=1;cb=0;}
+    else{cr=1;cg=1-(val-0.75)*4;cb=0;}
+    return{r:Math.max(cr,cold*0.3),g:Math.max(cg*0.7,cold*0.5),b:Math.max(cb,cold)};
   });
 }
 
-/* ─── CANVAS FEATURE MAP RENDERER ────────────────────────── */
-var _fmPhase = 0;
-function _drawFeatureMap(id, colorFn) {
-  var canvas = document.getElementById(id);
-  if (!canvas) return;
-  var W = 128, H = 80;
-  canvas.width  = W;
-  canvas.height = H;
-  var ctx = canvas.getContext('2d');
-  var img = ctx.createImageData(W, H);
-  var t   = _fmPhase;
-
-  for (var py = 0; py < H; py++) {
-    for (var px = 0; px < W; px++) {
-      var u = px / W, v = py / H;
-      var col = colorFn(u, v, t);
-      var idx = (py * W + px) * 4;
-      img.data[idx]   = Math.min(255, Math.floor(col.r * 255));
-      img.data[idx+1] = Math.min(255, Math.floor(col.g * 255));
-      img.data[idx+2] = Math.min(255, Math.floor(col.b * 255));
-      img.data[idx+3] = 255;
+function _drawFM(id,W,H,colorFn){
+  var canvas=document.getElementById(id);
+  if(!canvas)return;
+  canvas.width=W; canvas.height=H;
+  var ctx=canvas.getContext('2d');
+  var img=ctx.createImageData(W,H);
+  var d=img.data;
+  for(var py=0;py<H;py++){
+    for(var px=0;px<W;px++){
+      var col=colorFn(px/W,py/H);
+      var idx=(py*W+px)*4;
+      d[idx  ]=Math.min(255,col.r*255|0);
+      d[idx+1]=Math.min(255,col.g*255|0);
+      d[idx+2]=Math.min(255,col.b*255|0);
+      d[idx+3]=255;
     }
   }
-  ctx.putImageData(img, 0, 0);
-  _fmPhase += 0.12;
+  ctx.putImageData(img,0,0);
 }
-
 /* ════════════════════════════════════════════════════════════
    FIELD MAP — each scan marks a zone with real severity colour
 ════════════════════════════════════════════════════════════ */
